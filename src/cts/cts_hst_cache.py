@@ -5,9 +5,9 @@ from datetime import datetime as dt
 from datetime import timedelta as td
 from pathlib import Path
 
-from core.core_util import encode_field
+from core.core_util import encode_field, E_EMPTY
 from cts.cts_cdn import Cdn, get_filtered_dico_async, get_filtered_dico
-from cts.cts_cfg import TCLASSES, E_XCH_CBOE, E_SEC_FUT, FUT, MONTHLY, QUARTERLY, INS
+from cts.cts_cfg import TCLASSES, E_XCH_CBOE, E_SEC_FUT, FUT, MONTHLY, QUARTERLY, INS, E_CALL, E_PUT
 
 CACHE_DIR = Path(__file__).resolve().parent /"cache" / "histo"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -87,7 +87,7 @@ async def _all_req_key_from_opt():
         for o in ops:
             _req_key_from_cdn(k, o, cfg)
 
-def _req_key_from_cdn(idx:int) :
+def _req_key_from_cdn2(idx:int) :
     """
     Parse a CDN local symbol into fields suitable for gen_key().
     """
@@ -172,8 +172,8 @@ def _gen_key(idx: int , expiry: str| int, strike: float, right: bytes, tc: bytes
             return len(array) - 1
     def _encode_strike_right(_strike: float, _right: bytes) -> int:
         return 0 if _strike == 0 else (
-            int(_strike*1000) if _right==b'C\x00' else (
-                1000000000 + int(_strike*1000) if _right==b'C\x00' else 2000000000+ int(_strike*1000)
+            int(_strike*1000) if _right==E_CALL else (
+                1000000000 + int(_strike*1000) if _right==E_PUT else 2000000000+ int(_strike*1000)
             )
         )
     cfg_idx = idx                                       #1byte
@@ -192,13 +192,13 @@ def decode_key(key):
         return yr+mt+dy
     def _decode_strike_right(tmp:int):
         if tmp == 0:
-            return 0, b'\x00'
+            return 0, E_EMPTY
         elif tmp < 2000000000:
-            return tmp - 1000000000, b'C\x00'
+            return tmp - 1000000000, E_CALL
         elif tmp < 3000000000:
-            return tmp - 2000000000, b'P\x00'
+            return tmp - 2000000000, E_PUT
         else:
-            return 0, b'\x00'
+            return 0, E_EMPTY
 
     prms = struct.unpack(HISTO_KEY_FORMAT,key)
     cfg_idx = prms[0]

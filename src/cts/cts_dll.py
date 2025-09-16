@@ -1,13 +1,13 @@
 #/cts/cts_dll
-from core.core_util import encode_field, get_fields_if_match, E_EMPTY, E_ZERO, get_fields_if_match2
-from cts.cts_cfg import CtsChunks, MSG_CONTRACT_DETAILS_END, MSG_CONTRACT_DETAILS, REQ_CONTRACT_DETAILS, MSG_OPT_PARAMS, \
-    MSG_OPT_PARAMS_END
+from core.core_util import encode_field, E_EMPTY, E_ZERO, get_fields_if_match
+from cts.cts_cfg import MSG_CONTRACT_DETAILS_END, MSG_CONTRACT_DETAILS, REQ_CONTRACT_DETAILS, MSG_OPT_PARAMS, \
+    MSG_OPT_PARAMS_END, E_CUR_USD, VERSION_8, INCLUDE_EXPIRED_FALSE
 
 MSG = ['msgId', 'version', 'reqId', 'conId', 'symbol', 'secType', 'lastTradeDateOrContractMonth', 'strike', 'right',
        'multiplier', 'exchange', 'primaryExch', 'currency', 'localSymbol', 'tradingClass', 'includeExpired',
        'secIdType', 'secId', 'issuerId']
 
-async def req_sec_def_opt_params(tws, req_id, prms):
+def set_opt_params_request(req_id, prms):
     payload_parts = [b'78\x00',
                      encode_field(req_id),
                      prms.get('root', E_EMPTY),
@@ -17,6 +17,11 @@ async def req_sec_def_opt_params(tws, req_id, prms):
                      ]
     # Concatenate all binary chunks
     payload = b''.join(payload_parts)
+    return payload
+
+
+async def req_sec_def_opt_params(tws, req_id, prms):
+    payload = set_opt_params_request(req_id, prms)
     #print(payload)
     await tws.send_frame_async(payload)
 
@@ -59,10 +64,11 @@ async def req_sec_def_opt_params(tws, req_id, prms):
     return results
 
 
-async def req_cts_det_async(tws, req_id, prms):
+
+def set_contract_request(req_id, prms):
     """Request contract details using binary chunks for maximum efficiency"""
     payload_parts = [REQ_CONTRACT_DETAILS,
-                     CtsChunks.VERSION_8,
+                     VERSION_8,
                      encode_field(req_id),
                      prms.get('conid', E_EMPTY),
                      prms.get('root', E_EMPTY),
@@ -74,21 +80,26 @@ async def req_cts_det_async(tws, req_id, prms):
                      prms.get('mul', E_EMPTY),
                      prms.get('xch', E_EMPTY),
                      prms.get('prim', E_EMPTY),
-                     prms.get('cur', CtsChunks.E_CUR_USD),
+                     prms.get('cur', E_CUR_USD),
                      encode_field(prms.get('lSym', '')),
                      prms.get('tc', E_EMPTY),
-                     CtsChunks.INCLUDE_EXPIRED_FALSE,
+                     INCLUDE_EXPIRED_FALSE,
                      prms.get('secIdType', E_EMPTY),
                      prms.get('secId', E_EMPTY),
                      prms.get('issuerId', E_EMPTY)
                      ]
-
     # Concatenate all binary chunks
     payload = b''.join(payload_parts)
+    return payload
+
+
+async def req_cts_det_async(tws, req_id, prms):
+    """Request contract details using binary chunks for maximum efficiency"""
+    payload = set_contract_request(req_id, prms)
     #print(payload)
     await tws.send_frame_async(payload)
 
-    results = None
+    res = None
     while True:
         response = await tws.recv_frame_async()
         if not response:
@@ -98,17 +109,8 @@ async def req_cts_det_async(tws, req_id, prms):
         end_of_field_0 = response.index(b'\x00')
         idx=response[:end_of_field_0]
         #print(response)
-        # print(idx)
         if idx == MSG_CONTRACT_DETAILS:
-            #res = get_fields_if_match(response, MSG_CONTRACT_DETAILS, (2, 12))
-            res = get_conid_from_callback(response)
-            #res = get_fields_if_match2(response, CtsChunks.MSG_CONTRACT_DETAILS)
-            #print(res)
-            # if res is not None:
-            #     res[1] = int(res[1][4:8]+res[1][3:4]) if res[1]!=E_EMPTY else 0
-            #     res[2] = float(res[2][:-1])
-            #     res[3] = 0 if res[3]==E_EMPTY else (1 if res[3]==b'C\x00' else 2)
-            results=res
+            res = _get_conid_from_callback(response)
         if idx == MSG_CONTRACT_DETAILS_END:
             print(f"Contract details end for req_id: {req_id}")
             break
@@ -116,9 +118,9 @@ async def req_cts_det_async(tws, req_id, prms):
             msg = b'No security definition has been found for the request'
             if msg in response:
                 break
-    return results
+    return res
 
-def get_conid_from_callback(data: bytes) -> bytes:
+def _get_conid_from_callback(data: bytes) -> bytes:
     if not data.startswith(b'10\x00'):
         return b''
     pos = 0

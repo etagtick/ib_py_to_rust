@@ -1,17 +1,13 @@
 # cts_cfg.py
-import struct
 from datetime import datetime as dt
-from pathlib import Path
 from typing import Tuple
-
 from core.core_util import E_EMPTY
 
 # 8-byte key structure (little-endian)
 
 
-
-RECORD_FMT = "<BBBBI f I"  # root, tclass, right, exch, expiry, strike, conid ???
-RECORD_SIZE = struct.calcsize(RECORD_FMT)  # 16 bytes
+#RECORD_FMT = "<BBBBI f I"  # root, tclass, right, exch, expiry, strike, conid ???
+#RECORD_SIZE = struct.calcsize(RECORD_FMT)  # 16 bytes
 
 
 QUARTERLY = 2
@@ -27,7 +23,13 @@ wDay=['MO','TU','WE','TH','FR']
 month_codes = {1: 'F', 2: 'G', 3: 'H', 4: 'J', 5: 'K', 6: 'M', 7: 'N', 8: 'Q', 9: 'U', 10: 'V', 11: 'X', 12: 'Z'}
 MTH = ['NONE', 'F', 'G', 'H', 'J','K', 'M', 'N', 'Q', 'U', 'V', 'X', 'Z']
 
+
 PORTS = [4012, 4022]
+
+E_CALL = b'C\x00'
+E_PUT = b'P\x00'
+RIGHTS = [E_EMPTY,E_CALL,E_PUT]
+
 # Static arrays for index mapping
 
 E_MTH_F = b"01\x00"
@@ -219,6 +221,12 @@ REQ_OPT_PARAMS = b"78\x00"  # msgId
 MSG_OPT_PARAMS = b"75"  # msgId
 MSG_OPT_PARAMS_END = b"76"  # msgId
 
+VERSION_8 = b"8\x00"  # version
+
+INCLUDE_EXPIRED_FALSE = b"0\x00"
+INCLUDE_EXPIRED_TRUE = b"1\x00"
+
+
 class CtsChunks:
     # Message header chunks
 
@@ -226,11 +234,6 @@ class CtsChunks:
 
 
 
-    VERSION_8 = b"8\x00"  # version
-
-
-    INCLUDE_EXPIRED_FALSE = b"0\x00"
-    INCLUDE_EXPIRED_TRUE = b"1\x00"
 
     # Option rights
     E_CALL = b"C\x00"
