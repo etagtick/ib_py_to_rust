@@ -1,4 +1,6 @@
 #/cts/cts_dll
+from typing import Any
+
 from core.core_util import encode_field, E_EMPTY, E_ZERO, get_fields_if_match
 from cts.cts_cfg import MSG_CONTRACT_DETAILS_END, MSG_CONTRACT_DETAILS, REQ_CONTRACT_DETAILS, MSG_OPT_PARAMS, \
     MSG_OPT_PARAMS_END, E_CUR_USD, VERSION_8, INCLUDE_EXPIRED_FALSE
@@ -93,9 +95,9 @@ def set_contract_request(req_id, prms):
     return payload
 
 
-async def req_cts_det_async(tws, req_id, prms):
+async def req_cts_det_async(tws, req_id, payload):
     """Request contract details using binary chunks for maximum efficiency"""
-    payload = set_contract_request(req_id, prms)
+    #payload = set_contract_request(req_id, prms)
     #print(payload)
     await tws.send_frame_async(payload)
 
@@ -110,7 +112,7 @@ async def req_cts_det_async(tws, req_id, prms):
         idx=response[:end_of_field_0]
         #print(response)
         if idx == MSG_CONTRACT_DETAILS:
-            res = _get_conid_from_callback(response)
+            res = _get_all_from_callback(response)
         if idx == MSG_CONTRACT_DETAILS_END:
             print(f"Contract details end for req_id: {req_id}")
             break
@@ -130,3 +132,20 @@ def _get_conid_from_callback(data: bytes) -> bytes:
             return b''
     end = data.find(b'\x00', pos)
     return data[pos:end] if end != -1 else data[pos:]
+
+def _get_all_from_callback(data: bytes) -> list[Any]:
+    if not data.startswith(b'10\x00'):
+        return []
+    res=[]
+    pos = 0
+    for _ in range(12):  # 13 nulls to reach 12th value
+        pos = data.find(b'\x00', pos) + 1
+        if pos == 0:
+            res.append(b'')
+        end = data.find(b'\x00', pos)
+        res.append(data[pos:end] if end != -1 else data[pos:])
+    tmp= [x+b'\x00' for i,x in enumerate(res) if i in [1,2,3,4,5,6,10,11,12]]
+    tmp[2]=int(tmp[2][:8])
+    tmp[3]=float(tmp[3].replace(b'\x00',b''))
+    return tmp
+

@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 import asyncio
+
+from cts.cts_cache import _gen_key
 from cts.cts_cfg import PERM, FUT
-from cts.cts_hst_cache import HistoCache
-from cts.cts_cache import CtsCache
-from cts.cts_cdn import Cdn
 from cts.cts_api import CtsApi
 
 def check_missings(cfg, _cache):
     if not cfg["active"]:
         return
-    key = CtsCache.gen_key(cfg["root"], '', 0, 0, cfg["xch"], cfg["tc"], cfg.get("step", 1))
+    key = _gen_key(cfg["root"], '', 0, 0, cfg["xch"], cfg["tc"], cfg.get("step", 1))
     if key not in _cache.records:
         _cache.add_record(key, cfg["conid"])
         print(f"[PERM] Added {cfg['root']} {cfg['tc']} -> {cfg['conid']}")
@@ -17,12 +16,12 @@ def check_missings(cfg, _cache):
         print(f"[PERM] Already in cache: {cfg['root']} {cfg['tc']}")
 
 
-def load_perm_into_cache(_cache: HistoCache):
+def load_perm_into_cache(_cache):
     """Insert all permanent instruments (PERM) into cache if missing."""
     for cfg in PERM:
         if not cfg["active"]:
             continue
-        key = CtsCache.gen_key(cfg["root"], 0, 0, 0, cfg["xch"], cfg["tc"], cfg.get("step", 1))
+        key = _gen_key(cfg["root"], 0, 0, 0, cfg["xch"], cfg["tc"], cfg.get("step", 1))
         if key not in _cache.records:
             _cache.add_record(key, cfg["conid"])
             print(f"[PERM] Added {cfg['root']} {cfg['tc']} -> {cfg['conid']}")
@@ -31,7 +30,7 @@ def load_perm_into_cache(_cache: HistoCache):
     _cache.save()
 
 
-async def load_fut_into_cache(_cache: HistoCache, gateway_port: int = 4012):
+async def load_fut_into_cache(_cache, gateway_port: int = 4012):
     """Insert missing FUT contracts using IB callback (conid only)."""
     api = CtsApi(slot=1)
     api.tws.port = gateway_port
@@ -40,13 +39,13 @@ async def load_fut_into_cache(_cache: HistoCache, gateway_port: int = 4012):
         for idx, cfg in enumerate(FUT):
             if not cfg["active"]:
                 continue
-            base_key = CtsCache.gen_key(cfg["root"], 0, 0, 0, cfg["xch"], cfg["tc"], cfg.get("step", 1))
+            base_key = _gen_key(cfg["root"], 0, 0, 0, cfg["xch"], cfg["tc"], cfg.get("step", 1))
             if base_key in _cache.records:
                 print(f"[FUT] Already in cache: {cfg['root']} {cfg['tc']} on {cfg['xch']}")
                 continue
             print(f"[FUT] Requesting {cfg['root']} {cfg['tc']} on {cfg['xch']}")
             async for conid in api.req_fut(idx):
-                key = CtsCache.gen_key(cfg["root"], 0, 0, 0, cfg["xch"], cfg["tc"], cfg.get("step", 1))
+                key = _gen_key(cfg["root"], 0, 0, 0, cfg["xch"], cfg["tc"], cfg.get("step", 1))
                 _cache.add_record(key, conid)
                 _cache.save()
     finally:
@@ -54,7 +53,7 @@ async def load_fut_into_cache(_cache: HistoCache, gateway_port: int = 4012):
         print("FUT gateway disconnected")
 
 
-async def load_opt_into_cache(_cache: HistoCache, gateway_port: int = 4012):
+async def load_opt_into_cache(_cache, gateway_port: int = 4012):
     """Insert missing OPT contracts (CDN + IB)."""
     print("[OPT] Starting option load")
     cdn_data = await Cdn.get_all_local_symbols()

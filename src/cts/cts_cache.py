@@ -119,6 +119,79 @@ def _req_key_from_cdn(idx:int, l_sym: str) :
 
 
 # --- Key generation ---
+def _gen_key2(callback) -> bytes:
+    """Generate the unique 8-byte key."""
+    def _encode_mmddy(date: str | int) -> int:
+        """
+        Convert expiry (YYYYMMDD int or 'YYMMDD' string) to mmddy (16-bit).
+        FUT can pass 'YYMM' (=> MM00Y), PERM passes 0.
+        """
+        if date in (0, "0", None,''):
+            return 0
+        s = str(date)
+        if len(s) == 6:  # YYMMDD
+            y, m, d = int(s[:2]), int(s[2:4]), int(s[4:6])
+            return int(f"{m:02d}{d:02d}{y % 10}")
+        elif len(s) == 4:  # YYMM
+            y, m = int(s[:2]), int(s[2:4])
+            return int(f"{m:02d}00{y % 10}")
+        elif len(s) == 8:  # YYYYMMDD
+            yyyy, mm, dd = int(s[:4]), int(s[4:6]), int(s[6:8])
+            return int(f"{mm:02d}{dd:02d}{yyyy % 10}")
+        raise ValueError(f"Unsupported expiry format: {s}")
+    def _get_index_safe(array: List[bytes], value: bytes) -> int:
+        try:
+            return array.index(value)
+        except ValueError:
+            array.append(value)
+            return len(array) - 1
+    def _encode_strike_right(_strike: float, _right: bytes) -> int:
+        return 0 if _strike == 0 else (
+            int(_strike*1000) if _right==E_CALL else (
+                1000000000 + int(_strike*1000) if _right==E_PUT else 2000000000+ int(_strike*1000)
+            )
+        )
+    root=callback[0]
+    type=callback[1]
+    expiry=callback[2]
+    strike=callback[3]
+    right=callback[4]
+    xch=callback[5]
+    tc=callback[6]
+    idx=[i for i,x in INS if x['root']==root and x['xch']==xch and x['sType']==type]
+    [print(x) for x in idx]
+    cfg_idx = idx                                       #1byte
+    tc_idx = _get_index_safe(TCLASSES, tc)              #1byte
+    expiry_mmddy = _encode_mmddy(expiry)                 #2bytes
+    enc_k_right = _encode_strike_right(strike, right)   #4bytes
+
+    return struct.pack(HISTO_KEY_FORMAT,cfg_idx, tc_idx, expiry_mmddy, enc_k_right)
+
+def decode_key(key):
+    def _decode_yyyymmdd(_date) -> (int,bytes):
+        dt_str=str(_date).rjust(5,'0')
+        yr='202'+dt_str[-1]
+        dy = dt_str[-3:-1]
+        mt = dt_str[0:2]
+        return yr+mt+dy
+    def _decode_strike_right(tmp:int):
+        if tmp == 0:
+            return 0, E_EMPTY
+        elif tmp < 2000000000:
+            return tmp - 1000000000, E_CALL
+        elif tmp < 3000000000:
+            return tmp - 2000000000, E_PUT
+        else:
+            return 0, E_EMPTY
+
+    prms = struct.unpack(HISTO_KEY_FORMAT,key)
+    cfg_idx = prms[0]
+    strike, right =  _decode_strike_right(prms[3])
+    return {'root':INS[cfg_idx]['root'], 'xch':INS[cfg_idx]['xch'],'exp':_decode_yyyymmdd(prms[2]), 'strike':strike,'right':right,'tc':TCLASSES[prms[1]] }
+
+
+
+# --- Key generation ---
 def _gen_key(idx: int , expiry: str| int, strike: float, right: bytes, tc: bytes) -> bytes:
     """Generate the unique 8-byte key."""
     def _encode_mmddy(date: str | int) -> int:
